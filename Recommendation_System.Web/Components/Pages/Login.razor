@@ -1,0 +1,89 @@
+﻿@page "/login"
+@using System.ComponentModel.DataAnnotations
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label for="email" class="form-label">Email</label>
+        <InputText id="email" class="form-control" @bind-Value="loginModel.Email" />
+        <ValidationMessage For="@(() => loginModel.Email)" />
+    </div>
+
+    <div class="mb-3">
+        <label for="password" class="form-label">Password</label>
+        <InputText id="password" type="password" class="form-control" @bind-Value="loginModel.Password" />
+        <ValidationMessage For="@(() => loginModel.Password)" />
+    </div>
+
+    <div class="mb-3 form-check">
+        <InputCheckbox id="rememberMe" class="form-check-input" @bind-Value="rememberMe" />
+        <label class="form-check-label" for="rememberMe">Remember me</label>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+
+    <button type="submit" class="btn btn-primary" disabled="@isLoading">
+        @if (isLoading)
+        {
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <span>Logging in...</span>
+        }
+        else
+        {
+            <span>Login</span>
+        }
+    </button>
+</EditForm>
+
+@code {
+    private LoginRequest loginModel = new();
+    private bool rememberMe = false;
+    private bool isLoading = false;
+    private string? errorMessage;
+
+    public class LoginRequest
+    {
+        [Required]
+        [EmailAddress]
+        public string? Email { get; set; }
+
+        [Required]
+        [MinLength(6)]
+        public string? Password { get; set; }
+    }
+
+    private async Task HandleLogin()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"/User/login?useCookies={rememberMe.ToString().ToLower()}", loginModel);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Redirect to home or dashboard
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                errorMessage = "Login failed. " + content;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "An error occurred: " + ex.Message;
+        }
+
+        isLoading = false;
+    }
+}
