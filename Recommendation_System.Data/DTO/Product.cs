@@ -10,10 +10,10 @@ public class Product
     public int ProductId { get; set; }
 
     [Required, MaxLength(200)]
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 
     [MaxLength(1000)]
-    public string Description { get; set; }
+    public string? Description { get; set; }
 
     [Required]
     [Column(TypeName = "decimal(18,2)")]
