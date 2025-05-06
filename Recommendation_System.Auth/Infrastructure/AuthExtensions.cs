@@ -3,21 +3,28 @@ using Microsoft.AspNetCore.Identity;
 using FutsalApi.ApiService.Infrastructure.Auth;
 using Recommendation_System.Auth.Routes;
 using Recommendation_System.Auth.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace Recommendation_System.Auth.Infrastructure;
 
 public static class AuthExtensions
 {
-    public static IServiceCollection AddAuthConfig(this IServiceCollection services)
+    public static IServiceCollection AddAuthConfig(this IServiceCollection services,IConfiguration configuration)
     {
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+        // Add DbContext with PostgreSQL
+        services.AddDbContext<AuthDbContext>(options =>
+            options.UseNpgsql(connectionString));
+
         // Add Authentication
         services.AddAuthentication().AddBearerToken(IdentityConstants.BearerScheme,
             options =>
             {
                 options.BearerTokenExpiration = TimeSpan.FromDays(1);
                 options.RefreshTokenExpiration = TimeSpan.FromDays(30);
-            })
-            .AddGoogleAuthentication();
+            });
+            //.AddGoogleAuthentication();
 
         // Add Authorization
         services.AddAuthorization(options =>
