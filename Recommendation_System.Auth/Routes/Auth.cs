@@ -26,7 +26,7 @@ using Microsoft.Extensions.Options;
 [assembly: InternalsVisibleTo("FutsalApi.Tests")]
 namespace Recommendation_System.Auth.Routes;
 
-public class AuthApiEndpointRouteBuilderExtensions 
+public class AuthApiEndpointRouteBuilderExtensions
 {
     private readonly EmailAddressAttribute _emailAddressAttribute = new();
 
@@ -39,13 +39,11 @@ public class AuthApiEndpointRouteBuilderExtensions
         var emailSender = endpoints.ServiceProvider.GetRequiredService<IEmailSender<User>>();
         var linkGenerator = endpoints.ServiceProvider.GetRequiredService<LinkGenerator>();
 
-       string? confirmEmailEndpointName = null;
+        string? confirmEmailEndpointName = null;
 
         var routeGroup = endpoints.MapGroup("User")
             .WithTags("User");
 
-
-       
         routeGroup.MapPost("/register", RegisterUser)
         .WithName("RegisterUser")
         .WithSummary("Registers a new user.")
@@ -136,6 +134,15 @@ public class AuthApiEndpointRouteBuilderExtensions
         .WithSummary("Resets the user's password.")
         .WithDescription("Resets the user's password using the provided email, reset code, and new password.")
         .Accepts<ResetPasswordRequest>("application/json")
+        .Produces<Ok>(StatusCodes.Status200OK)
+        .Produces<ValidationProblem>(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        routeGroup.MapPost("/verifyResetCode", VerifyResetCode)
+        .WithName("VerifyResetCode")
+        .WithSummary("Verifies the password reset code for a user.")
+        .WithDescription("Checks if the provided reset code is valid for the given email.")
+        .Accepts<VerifyResetCodeRequest>("application/json")
         .Produces<Ok>(StatusCodes.Status200OK)
         .Produces<ValidationProblem>(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status500InternalServerError);
@@ -456,6 +463,31 @@ public class AuthApiEndpointRouteBuilderExtensions
         return TypedResults.Ok();
     }
 
+    internal async Task<Results<Ok, ValidationProblem>> VerifyResetCode(
+        [FromBody] VerifyResetCodeRequest verifyRequest, [FromServices] IServiceProvider sp)
+    {
+        var userManager = sp.GetRequiredService<UserManager<User>>();
+        var user = await userManager.FindByEmailAsync(verifyRequest.Email);
+        if (user is null || !(await userManager.IsEmailConfirmedAsync(user)))
+        {
+            return CreateValidationProblem(IdentityResult.Failed(userManager.ErrorDescriber.InvalidToken()));
+        }
+        try
+        {
+            var code = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(verifyRequest.ResetCode));
+            var isValid = await userManager.VerifyUserTokenAsync(user, userManager.Options.Tokens.PasswordResetTokenProvider, "ResetPassword", code);
+            if (!isValid)
+            {
+                return CreateValidationProblem("InvalidResetCode", "The reset code is invalid or expired.");
+            }
+        }
+        catch (FormatException)
+        {
+            return CreateValidationProblem("InvalidResetCode", "The reset code format is invalid.");
+        }
+        return TypedResults.Ok();
+    }
+
     internal async Task<Results<Ok, ProblemHttpResult>> DeactivateUser(
         ClaimsPrincipal claimsPrincipal, [FromServices] IServiceProvider sp)
     {
@@ -678,5 +710,11 @@ public class AuthApiEndpointRouteBuilderExtensions
     private sealed class FromQueryAttribute : Attribute, IFromQueryMetadata
     {
         public string? Name => null;
+    }
+
+    public class VerifyResetCodeRequest
+    {
+        public string Email { get; set; } = string.Empty;
+        public string ResetCode { get; set; } = string.Empty;
     }
 }
