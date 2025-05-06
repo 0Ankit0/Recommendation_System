@@ -10,6 +10,7 @@ public static class GoogleAuthConfiguration
     public static AuthenticationBuilder AddGoogleAuthentication(
             this AuthenticationBuilder builder)
     {
+        builder.Services.AddScoped<IGeneralSettingsService, GeneralSettingsService>();
         var serviceProvider = builder.Services.BuildServiceProvider();
         var secretRetriever = serviceProvider.GetRequiredService<IGeneralSettingsService>();
 
