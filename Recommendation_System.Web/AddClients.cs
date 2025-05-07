@@ -12,6 +12,9 @@ public static class ServiceCollectionExtensions
     {
         var apiBaseAddress = new Uri("https://apiservice");
 
+        // Register the AuthorizationMessageHandler
+        services.AddTransient<AuthorizationMessageHandler>();
+
         // Register all classes with a constructor that takes HttpClient
         var apiClientTypes = Assembly.GetExecutingAssembly()
             .GetTypes()
@@ -19,11 +22,10 @@ public static class ServiceCollectionExtensions
                 t.IsClass &&
                 !t.IsAbstract &&
                 t.GetConstructors().Any(ctor =>
-                    {
-                        var parameters = ctor.GetParameters();
-                        return parameters.Length == 1 && parameters[0].ParameterType == typeof(HttpClient);
-                    }
-                )
+                {
+                    var parameters = ctor.GetParameters();
+                    return parameters.Length == 1 && parameters[0].ParameterType == typeof(HttpClient);
+                })
             );
 
         foreach (var clientType in apiClientTypes)
@@ -40,9 +42,14 @@ public static class ServiceCollectionExtensions
 
             var genericMethod = method.MakeGenericMethod(clientType);
             genericMethod.Invoke(null, new object[] {
-        services,
-        (Action<HttpClient>)(client => { client.BaseAddress = apiBaseAddress; })
-    });
+                services,
+                (Action<HttpClient>)(client => { client.BaseAddress = apiBaseAddress; })
+            });
+
+            // Add the AuthorizationMessageHandler to each HttpClient
+            services.AddHttpClient(clientType.Name)
+                .AddHttpMessageHandler<AuthorizationMessageHandler>();
         }
     }
 }
+
