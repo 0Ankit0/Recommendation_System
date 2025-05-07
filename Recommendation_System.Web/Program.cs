@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Hosting;
 using Recommendation_System.Web;
 using Recommendation_System.Web.Components;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +15,10 @@ builder.Services.AddRazorComponents()
 
 
 builder.Services.AddClients();
+
+builder.Services.AddScoped<TokenService>();
+builder.Services.AddHttpContextAccessor();
+
 
 var app = builder.Build();
 
