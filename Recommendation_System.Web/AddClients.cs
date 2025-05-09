@@ -24,7 +24,7 @@ public static class ServiceCollectionExtensions
                 t.GetConstructors().Any(ctor =>
                 {
                     var parameters = ctor.GetParameters();
-                    return parameters.Length == 1 && parameters[0].ParameterType == typeof(HttpClient);
+                    return parameters.Any(e => e.ParameterType == typeof(HttpClient));
                 })
             );
 

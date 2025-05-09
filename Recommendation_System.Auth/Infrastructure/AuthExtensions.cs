@@ -4,6 +4,7 @@ using FutsalApi.ApiService.Infrastructure.Auth;
 using Recommendation_System.Auth.Routes;
 using Recommendation_System.Auth.Models;
 using Microsoft.EntityFrameworkCore;
+using Recommendation_System.Auth.Services;
 
 namespace Recommendation_System.Auth.Infrastructure;
 
@@ -41,6 +42,9 @@ public static class AuthExtensions
 
         // Add Permission Handler
         services.AddSingleton<IAuthorizationHandler, PermissionResourceHandler>();
+
+
+        services.AddTransient<IEmailSender<User>, EmailSender>();
 
         return services;
     }
