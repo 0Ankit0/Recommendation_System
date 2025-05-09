@@ -1,4 +1,5 @@
 using Recommendation_System.Auth.Infrastructure;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,8 +9,34 @@ builder.AddServiceDefaults();
 // Add services to the container.
 builder.Services.AddProblemDetails();
 
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// Configure JSON serialization to preserve property case
+builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = null; // Use PascalCase (default for C# models)
+});
+
+// Configure OpenAPI
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, context, _) =>
+    {
+        document.Info = new()
+        {
+            Title = "Recommendation System API",
+            Version = "v1",
+            Description = """
+                Modern API for  product Recommendation according to the user activity.
+                """,
+            Contact = new()
+            {
+                Name = "API Support",
+                Email = "api@example.com",
+                Url = new Uri("https://api.example.com/support")
+            }
+        };
+        return Task.CompletedTask;
+    });
+});
 
 builder.Services.AddAuthConfig(builder.Configuration);
 
@@ -21,10 +48,15 @@ app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-}
 
+    app.MapGet("/", () => Results.Redirect("/scalar"))
+   .ExcludeFromDescription();
+
+    app.MapScalarApiReference();
+}
 string[] summaries = ["Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"];
 
+app.UseAuthConfig(app);
 app.MapGet("/weatherforecast", () =>
 {
     var forecast = Enumerable.Range(1, 5).Select(index =>
@@ -42,7 +74,6 @@ app.MapGet("/weatherforecast", () =>
 app.MapDefaultEndpoints();
 
 app.Run();
-
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
