@@ -1,19 +1,23 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.BearerToken;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace Recommendation_System.Web;
 
-public class UserApiClient(HttpClient httpClient)
+public class UserApiClient(HttpClient httpClient,IHttpContextAccessor httpContextAccessor)
 {
     public async Task<HttpResponseMessage> RegisterAsync(RegisterRequest model)
         => await httpClient.PostAsJsonAsync("/User/register", model);
 
     public async Task<HttpResponseMessage> LoginAsync(LoginRequest model, bool useCookies = false)
-        => await httpClient.PostAsJsonAsync($"/User/login?useCookies={useCookies.ToString().ToLower()}", model);
+    => await httpClient.PostAsJsonAsync($"/User/login?useCookies={useCookies.ToString().ToLower()}", model);
 
     public async Task<HttpResponseMessage> LogoutAsync(bool useCookies = false)
-        => await httpClient.PostAsync($"/User/logout?useCookies={useCookies.ToString().ToLower()}", null);
+   =>await httpClient.PostAsync($"/User/logout?useCookies={useCookies.ToString().ToLower()}", null);
 
     public async Task<HttpResponseMessage> ForgotPasswordAsync(ForgotPasswordRequest model)
         => await httpClient.PostAsJsonAsync("/User/forgotPassword", model);
