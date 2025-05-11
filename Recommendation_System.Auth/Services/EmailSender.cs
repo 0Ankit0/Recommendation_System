@@ -19,6 +19,7 @@ public class EmailSender : IEmailSender<User>
         // var subject = "Confirm Your Email";
         // var body = $"Please confirm your email by clicking the following link: {confirmationLink}";
         // _smtpService.SendEmailAsync(email, subject, body);
+        Console.WriteLine($"Confirmation link sent to {email}: {confirmationLink}");
         return Task.CompletedTask;
 
     }
@@ -28,6 +29,7 @@ public class EmailSender : IEmailSender<User>
         // var subject = "Reset Your Password";
         // var body = $"You can reset your password by clicking the following link: {resetLink}";
         // _smtpService.SendEmailAsync(email, subject, body);
+        Console.WriteLine($"Password reset link sent to {email}: {resetLink}");
         return Task.CompletedTask;
     }
 
@@ -36,6 +38,7 @@ public class EmailSender : IEmailSender<User>
         // var subject = "Your Password Reset Code";
         // var body = $"Your password reset code is: {resetCode}";
         // _smtpService.SendEmailAsync(email, subject, body);
+        Console.WriteLine($"Password reset code sent to {email}: {resetCode}");
         return Task.CompletedTask;
     }
 }
