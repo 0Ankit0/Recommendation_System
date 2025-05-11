@@ -1,37 +1,37 @@
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Http;
 
 namespace Recommendation_System.Web;
 
-public class AuthorizationMessageHandler : DelegatingHandler
+public class AuthorizationMessageHandler(TokenService _tokenService, IHttpContextAccessor httpContextAccessor) : DelegatingHandler
 {
-    private readonly TokenService _tokenService;
-    private readonly IHttpContextAccessor _httpContextAccessor;
-
-    public AuthorizationMessageHandler(TokenService tokenService, IHttpContextAccessor httpContextAccessor)
-    {
-        _tokenService = tokenService;
-        _httpContextAccessor = httpContextAccessor;
-    }
-
+    private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
+        
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        // Retrieve the user ID from the claims in the current HTTP context
-        var userId = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-        if (!string.IsNullOrEmpty(userId))
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext != null && httpContext.Request.Cookies.TryGetValue("DeviceId", out var deviceId))
         {
-            var token = await _tokenService.GetTokenAsync(userId);
-            if (!string.IsNullOrEmpty(token))
+            var redisData = _tokenService.GetTokenAsync(deviceId).Result;
+            if (string.IsNullOrEmpty(redisData))
             {
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                // Handle the case where the token is not found
+                httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await httpContext.Response.WriteAsync("Unauthorized");
+                return new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
+            }
+            var tokenData = JsonSerializer.Deserialize<AccessTokenResponse>(redisData);
+            if (!string.IsNullOrEmpty(tokenData?.AccessToken))
+            {
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenData.AccessToken);
             }
         }
-
         return await base.SendAsync(request, cancellationToken);
     }
 }
