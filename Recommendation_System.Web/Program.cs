@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Hosting;
 using Recommendation_System.Web;
 using Recommendation_System.Web.Components;
@@ -16,11 +18,23 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddClients();
 
-builder.Services.AddScoped<TokenService>();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<TokenService>();
 
+// Add authentication services.
+builder.Services.AddAuthentication(IdentityConstants.BearerScheme)
+    .AddBearerToken(IdentityConstants.BearerScheme, options =>
+    {
+        options.BearerTokenExpiration = TimeSpan.FromDays(1);
+        options.RefreshTokenExpiration = TimeSpan.FromDays(30);
+    });
+// Add authorization services.
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+app.UseDeviceIdHandlerMiddleware();
+app.UseTokenHeaderHandlerMiddleware();
 
 if (!app.Environment.IsDevelopment())
 {
@@ -34,6 +48,10 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 
 app.UseOutputCache();
+
+// Add authentication and authorization middleware.
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapStaticAssets();
 
