@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.Json.Serialization;
 
 namespace Recommendation_System.Auth.Models;
 
@@ -40,5 +41,6 @@ public class ClaimModel
     //for value make sure the value is using enum Permissions or Resources
     public Permissions Permission { get; set; }
     public Resources Resource { get; set; }
+    [JsonIgnore]
     public string Value => $"{Permission}:{Resource}";
 }
