@@ -47,8 +47,8 @@ public static class ServiceCollectionExtensions
             });
 
             // Add the AuthorizationMessageHandler to each HttpClient
-            services.AddHttpClient(clientType.Name)
-                .AddHttpMessageHandler<AuthorizationMessageHandler>();
+            services.AddHttpClient(clientType.Name);
+            // .AddHttpMessageHandler<AuthorizationMessageHandler>();
         }
     }
 }
