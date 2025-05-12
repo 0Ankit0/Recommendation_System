@@ -103,13 +103,13 @@ public class AuthApiEndpointRouteBuilderExtensions
         .WithDescription("Confirms the user's email address using the provided user ID and confirmation code.")
         .Produces<ContentHttpResult>(StatusCodes.Status200OK)
         .Produces<UnauthorizedHttpResult>(StatusCodes.Status401Unauthorized)
-        .ProducesProblem(StatusCodes.Status500InternalServerError)
-        .Add(endpointBuilder =>
-        {
-            var finalPattern = ((RouteEndpointBuilder)endpointBuilder).RoutePattern.RawText;
-            confirmEmailEndpointName = $"{nameof(MapEndpoint)}-{finalPattern}";
-            endpointBuilder.Metadata.Add(new EndpointNameMetadata(confirmEmailEndpointName));
-        });
+        .ProducesProblem(StatusCodes.Status500InternalServerError);
+        // .Add(endpointBuilder =>
+        // {
+        //     var finalPattern = ((RouteEndpointBuilder)endpointBuilder).RoutePattern.RawText;
+        //     confirmEmailEndpointName = $"{nameof(MapEndpoint)}-{finalPattern}";
+        //     endpointBuilder.Metadata.Add(new EndpointNameMetadata(confirmEmailEndpointName));
+        // });
 
         routeGroup.MapPost("/resendConfirmationEmail", ResendConfirmationEmail)
         .WithName("ResendConfirmationEmail")
@@ -158,14 +158,34 @@ public class AuthApiEndpointRouteBuilderExtensions
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status500InternalServerError);
 
-        accountGroup.MapPost("/revalidate", RevalidateUser)
-        .WithName("RevalidateUser")
-        .WithSummary("Revalidate a user.")
-        .WithDescription("Revalidate a user account.")
+        accountGroup.MapPost("/sendRevalidateEmail", SendRevalidateEmailEndpoint)
+        .WithName("SendRevalidateEmail")
+        .WithSummary("Sends a revalidation link to the user's email.")
+        .WithDescription("Sends a revalidation link to the provided email address for account revalidation.")
+        .Accepts<ResendConfirmationEmailRequest>("application/json")
+        .AllowAnonymous()
         .Produces<Ok>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        accountGroup.MapGet("/revalidate", RevalidateUserByLink)
+        .WithName("RevalidateUser")
+        .WithSummary("Revalidates a user via email link.")
+        .WithDescription("Revalidates a user account using a link sent to their email.")
+        .AllowAnonymous()
+        .Produces<ContentHttpResult>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        accountGroup.MapGet("/setup2fa", GenerateTwoFactorSetupCode)
+        .WithName("GenerateTwoFactorSetupCode")
+        .WithSummary("Generates a two-factor authentication setup code for the user.")
+        .WithDescription("Generates a time-based one-time password (TOTP) for the user during the two-factor authentication setup process.")
+        .Produces<Ok<string>>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status500InternalServerError);
+
 
         accountGroup.MapPost("/2fa", TwoFactor)
         .WithName("TwoFactor")
@@ -284,6 +304,10 @@ public class AuthApiEndpointRouteBuilderExtensions
             else if (!string.IsNullOrEmpty(login.TwoFactorRecoveryCode))
             {
                 result = await signInManager.TwoFactorRecoveryCodeSignInAsync(login.TwoFactorRecoveryCode);
+            }
+            else
+            {
+                return TypedResults.Problem("Two-factor authentication is required. Please provide the two-factor code.", statusCode: StatusCodes.Status428PreconditionRequired);
             }
         }
         if (result.IsLockedOut)
@@ -509,25 +533,78 @@ public class AuthApiEndpointRouteBuilderExtensions
         return TypedResults.Ok();
     }
 
-    internal async Task<Results<Ok, ProblemHttpResult>> RevalidateUser(
-        ClaimsPrincipal claimsPrincipal, [FromServices] IServiceProvider sp)
+    internal async Task<Results<ContentHttpResult, ProblemHttpResult>> RevalidateUserByLink(
+    [FromQuery] string userId, [FromQuery] string code, [FromServices] IServiceProvider sp)
     {
         var userManager = sp.GetRequiredService<UserManager<User>>();
+        if (await userManager.FindByIdAsync(userId) is not { } user)
+        {
+            return TypedResults.Problem("User not found.", statusCode: StatusCodes.Status404NotFound);
+        }
+        try
+        {
+            code = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(code));
+        }
+        catch (FormatException)
+        {
+            return TypedResults.Problem("Invalid code format.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var isValid = await userManager.VerifyUserTokenAsync(user, userManager.Options.Tokens.EmailConfirmationTokenProvider, "RevalidateUser", code);
+        if (!isValid)
+        {
+            return TypedResults.Problem("Invalid or expired revalidation code.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        // Perform the revalidation (e.g., unlock user, reset lockout, etc.)
+        var result = await userManager.SetLockoutEndDateAsync(user, null);
+        if (!result.Succeeded)
+        {
+            return TypedResults.Problem("Failed to revalidate user.", statusCode: StatusCodes.Status500InternalServerError);
+        }
+
+        return TypedResults.Text("Your account has been revalidated.");
+    }
+
+    internal async Task<Results<Ok<TwoFactorSetupResponse>, ProblemHttpResult>> GenerateTwoFactorSetupCode(
+    ClaimsPrincipal claimsPrincipal, [FromServices] IServiceProvider sp)
+    {
+        var userManager = sp.GetRequiredService<UserManager<User>>();
+
+        // Get the authenticated user
         if (await userManager.GetUserAsync(claimsPrincipal) is not { } user)
         {
             return TypedResults.Problem("User not found.", statusCode: StatusCodes.Status404NotFound);
         }
-        if (user is null || !await userManager.IsEmailConfirmedAsync(user))
+
+        // Ensure the user has an authenticator key
+        var authenticatorKey = await userManager.GetAuthenticatorKeyAsync(user);
+        if (string.IsNullOrEmpty(authenticatorKey))
         {
-            return TypedResults.Problem("User not found or email not confirmed.", statusCode: StatusCodes.Status400BadRequest);
+            // Generate a new authenticator key if it doesn't exist
+            await userManager.ResetAuthenticatorKeyAsync(user);
+            authenticatorKey = await userManager.GetAuthenticatorKeyAsync(user);
         }
-        var result = await userManager.SetLockoutEndDateAsync(user, null);
-        if (!result.Succeeded)
+
+        // Generate a QR code URI for authenticator apps (e.g., Google Authenticator)
+        var email = await userManager.GetEmailAsync(user) ?? "user";
+        var issuer = "RecommendationSystem"; // Change to your app's name
+        var qrCodeUri = GenerateQrCodeUri(issuer, email, authenticatorKey);
+
+        // Return all setup info
+        return TypedResults.Ok(new TwoFactorSetupResponse
         {
-            return TypedResults.Problem(result.ToString(), statusCode: StatusCodes.Status500InternalServerError);
-        }
-        return TypedResults.Ok();
+            SharedKey = authenticatorKey,
+            QrCodeUri = qrCodeUri
+        });
     }
+
+    // Helper to generate QR code URI for authenticator apps
+    private static string GenerateQrCodeUri(string issuer, string email, string secret)
+    {
+        return $"otpauth://totp/{Uri.EscapeDataString(issuer)}:{Uri.EscapeDataString(email)}?secret={secret}&issuer={Uri.EscapeDataString(issuer)}&digits=6";
+    }
+
 
     internal async Task<Results<Ok<TwoFactorResponse>, ValidationProblem, NotFound>> TwoFactor(
         ClaimsPrincipal claimsPrincipal, [FromBody] TwoFactorRequest tfaRequest, [FromServices] IServiceProvider sp)
@@ -646,6 +723,45 @@ public class AuthApiEndpointRouteBuilderExtensions
             }
         }
         return TypedResults.Ok(await CreateInfoResponseAsync(user, userManager));
+    }
+    internal async Task<Ok> SendRevalidateEmailEndpoint(
+        [FromBody] ResendConfirmationEmailRequest request,
+        HttpContext context,
+        [FromServices] IServiceProvider sp,
+        LinkGenerator linkGenerator,
+        IEmailSender<User> emailSender)
+    {
+        var userManager = sp.GetRequiredService<UserManager<User>>();
+        var user = await userManager.FindByEmailAsync(request.Email);
+        if (user is null)
+        {
+            return TypedResults.Ok();
+        }
+        await SendRevalidateEmailAsync(user, userManager, context, request.Email, linkGenerator, emailSender);
+        return TypedResults.Ok();
+    }
+    internal async Task SendRevalidateEmailAsync(
+    User user,
+    UserManager<User> userManager,
+    HttpContext context,
+    string email,
+    LinkGenerator linkGenerator,
+    IEmailSender<User> emailSender)
+    {
+        var code = await userManager.GenerateUserTokenAsync(user, userManager.Options.Tokens.EmailConfirmationTokenProvider, "RevalidateUser");
+        code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+
+        var userId = await userManager.GetUserIdAsync(user);
+        var routeValues = new RouteValueDictionary()
+        {
+            ["userId"] = userId,
+            ["code"] = code,
+        };
+
+        var revalidateUrl = linkGenerator.GetUriByName(context, "RevalidateUser", routeValues)
+            ?? throw new NotSupportedException("Could not find endpoint named 'RevalidateUser'.");
+
+        await emailSender.SendConfirmationLinkAsync(user, email, $"Revalidate your account: {HtmlEncoder.Default.Encode(revalidateUrl)}");
     }
 
     private ValidationProblem CreateValidationProblem(string errorCode, string errorDescription) =>
