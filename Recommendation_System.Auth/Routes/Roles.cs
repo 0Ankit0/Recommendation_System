@@ -8,7 +8,7 @@ using Recommendation_System.Auth.Models;
 
 namespace Recommendation_System.Auth.Routes;
 
-public class RolesApiEndpoints 
+public class RolesApiEndpoints
 {
     public void MapEndpoint(IEndpointRouteBuilder endpoints)
     {
@@ -38,7 +38,7 @@ public class RolesApiEndpoints
             .WithName("CreateRole")
             .WithSummary("Creates a new role.")
             .WithDescription("Adds a new role to the system.")
-            .Accepts<Role>("application/json")
+            .Accepts<RoleRequest>("application/json")
             .Produces<Role>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status500InternalServerError);
@@ -141,10 +141,11 @@ public class RolesApiEndpoints
 
     internal async Task<Results<Ok<Role>, ProblemHttpResult>> CreateRole(
         [FromServices] RoleManager<Role> roleManager,
-        [FromBody] Role role)
+        [FromBody] RoleRequest roleRequest)
     {
         try
         {
+            var role = new Role { Name = roleRequest.Name };
             var result = await roleManager.CreateAsync(role);
             if (!result.Succeeded)
             {
@@ -232,13 +233,23 @@ public class RolesApiEndpoints
     }
 
     internal async Task<Results<Ok, ProblemHttpResult>> AddRoleClaim(
+        ClaimsPrincipal claimsPrincipal,
+        [FromServices] UserManager<User> userManager,
         [FromServices] RoleManager<Role> roleManager,
         string roleId,
         [FromBody] ClaimModel claimModel)
     {
         try
         {
-            var claim = new Claim(claimModel.Type.ToString(), claimModel.Value);
+            var user = await userManager.GetUserAsync(claimsPrincipal);
+
+            var claim = new Claim(
+                claimModel.Type.ToString(),
+                 claimModel.Value,
+                claimModel.Type == ClaimType.Permission ? "Permission" : "Custom",
+                user?.UserName ?? user?.Email,
+                "AuthService"
+                 );
             var role = await roleManager.FindByIdAsync(roleId);
             if (role == null)
             {
