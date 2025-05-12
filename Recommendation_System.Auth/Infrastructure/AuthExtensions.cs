@@ -10,7 +10,7 @@ namespace Recommendation_System.Auth.Infrastructure;
 
 public static class AuthExtensions
 {
-    public static IServiceCollection AddAuthConfig(this IServiceCollection services,IConfiguration configuration)
+    public static IServiceCollection AddAuthConfig(this IServiceCollection services, IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("DefaultConnection");
 
@@ -25,12 +25,15 @@ public static class AuthExtensions
                 options.BearerTokenExpiration = TimeSpan.FromDays(1);
                 options.RefreshTokenExpiration = TimeSpan.FromDays(30);
             });
-            //.AddGoogleAuthentication();
+        //.AddGoogleAuthentication();
 
         // Add Authorization
         services.AddAuthorization(options =>
         {
-            options.DefaultPolicy = new AuthorizationPolicyBuilder(IdentityConstants.BearerScheme)
+            options.DefaultPolicy = new AuthorizationPolicyBuilder(
+                    IdentityConstants.BearerScheme,
+                    IdentityConstants.ApplicationScheme
+                )
                 .RequireAuthenticatedUser()
                 .Build();
         });
