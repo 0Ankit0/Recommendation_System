@@ -1,5 +1,6 @@
 ﻿using StackExchange.Redis;
 
+//Keep track of the token along with the device id of the user so that they can log out of any device from anywhere
 public class TokenService
 {
     private readonly IConnectionMultiplexer _redis;

@@ -1,87 +1,119 @@
 ﻿@page "/login"
 @using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Authentication.BearerToken
+@using System.Text.Json
 @inject HttpClient Http
+@inject UserApiClient userApi
 @inject NavigationManager Navigation
+@inject TokenService tokenService
+@rendermode InteractiveServer
+@inject IHttpContextAccessor httpContextAccessor
 
-<h3>Login</h3>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h3 class="text-center mb-4">@formTitle</h3>
+                    <EditForm Model="loginModel" OnValidSubmit="HandleSubmit">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
 
-<EditForm FormName="LoginForm" Model="loginModel" OnValidSubmit="HandleLogin" class="login-form">
-    <DataAnnotationsValidator />
-    <ValidationSummary />
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <InputText id="email" class="form-control" @bind-Value="loginModel.Email"
+                                disabled="@isTwoFactorRequired" />
+                            <ValidationMessage For="@(() => loginModel.Email)" />
+                        </div>
 
-    <div class="mb-3">
-        <label for="email" class="form-label">Email</label>
-        <InputText id="email" class="form-control" @bind-Value="loginModel.Email" />
-        <ValidationMessage For="@(() => loginModel.Email)" />
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <InputText id="password" type="password" class="form-control"
+                                @bind-Value="loginModel.Password" disabled="@isTwoFactorRequired" />
+                            <ValidationMessage For="@(() => loginModel.Password)" />
+                        </div>
+
+                        @if (isTwoFactorRequired)
+                        {
+                            <div class="mb-3">
+                                <label for="twoFactorCode" class="form-label">Two-Factor Code</label>
+                                <InputText id="twoFactorCode" class="form-control" @bind-Value="loginModel.TwoFactorCode" />
+                                <ValidationMessage For="@(() => loginModel.TwoFactorCode)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="twoFactorRecoveryCode" class="form-label">Two-Factor Recovery Code
+                                    (Optional)</label>
+                                <InputText id="twoFactorRecoveryCode" class="form-control"
+                                    @bind-Value="loginModel.TwoFactorRecoveryCode" />
+                                <ValidationMessage For="@(() => loginModel.TwoFactorRecoveryCode)" />
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger">@errorMessage</div>
+                        }
+
+                        <button type="submit" class="btn btn-primary w-100" disabled="@isLoading">
+                            @if (isLoading)
+                            {
+                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                <span> @submitButtonText...</span>
+                            }
+                            else
+                            {
+                                <span>@submitButtonText</span>
+                            }
+                        </button>
+                    </EditForm>
+
+                    <div class="mt-3 text-center">
+                        <a href="/register">Don't have an account? Register</a> |
+                        <a href="/forgot-password">Forgot password?</a>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-
-    <div class="mb-3">
-        <label for="password" class="form-label">Password</label>
-        <InputText id="password" type="password" class="form-control" @bind-Value="loginModel.Password" />
-        <ValidationMessage For="@(() => loginModel.Password)" />
-    </div>
-
-    <div class="mb-3 form-check">
-        <InputCheckbox id="rememberMe" class="form-check-input" @bind-Value="rememberMe" />
-        <label class="form-check-label" for="rememberMe">Remember me</label>
-    </div>
-
-    @if (!string.IsNullOrEmpty(errorMessage))
-    {
-        <div class="alert alert-danger">@errorMessage</div>
-    }
-
-    <button type="submit" class="btn btn-primary" disabled="@isLoading">
-        @if (isLoading)
-        {
-            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-            <span>Logging in...</span>
-        }
-        else
-        {
-            <span>Login</span>
-        }
-    </button>
-</EditForm>
-
-<!-- Button for Google login -->
-<button class="btn btn-danger mt-2" @onclick="HandleGoogleLogin">Login with Google</button>
-
-<div class="mt-3">
-    <a href="/register">Don't have an account? Register</a> |
-    <a href="/forgot-password">Forgot password?</a>
 </div>
 
 @code {
     private LoginRequest loginModel = new();
-    private bool rememberMe = false;
     private bool isLoading = false;
+    private bool useCookie = false;
+    private bool isTwoFactorRequired = false;
     private string? errorMessage;
+    private string formTitle = "Login";
+    private string submitButtonText = "Login";
 
-    public class LoginRequest
-    {
-        [Required]
-        [EmailAddress]
-        public string? Email { get; set; }
-
-        [Required]
-        [MinLength(6)]
-        public string? Password { get; set; }
-    }
-
-    private async Task HandleLogin()
+    private async Task HandleSubmit()
     {
         isLoading = true;
         errorMessage = null;
 
         try
         {
-            var response = await Http.PostAsJsonAsync($"/User/login?useCookies={rememberMe.ToString().ToLower()}", loginModel);
+            var response = await userApi.LoginAsync(loginModel, useCookie);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.PreconditionRequired) // Status428PreconditionRequired
+            {
+                isTwoFactorRequired = true;
+                formTitle = "Two-Factor Authentication";
+                submitButtonText = "Verify";
+                return;
+            }
 
             if (response.IsSuccessStatusCode)
             {
-                // Redirect to home or dashboard
-                Navigation.NavigateTo("/");
+                var content = await response.Content.ReadAsStringAsync();
+                var tokenData = JsonSerializer.Deserialize<AccessTokenResponse>(content);
+                var deviceId = httpContextAccessor?.HttpContext?.Request.Headers["DeviceId"].ToString();
+                if (tokenData != null && deviceId != null)
+                {
+                    await tokenService.SetTokenAsync(deviceId, tokenData.AccessToken, TimeSpan.FromDays(30));
+                    Navigation.NavigateTo("/");
+                }
             }
             else
             {
@@ -95,11 +127,5 @@
         }
 
         isLoading = false;
-    }
-
-    private void HandleGoogleLogin()
-    {
-        // Logic for Google login
-        Navigation.NavigateTo("/google-login");
     }
 }

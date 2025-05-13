@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Recommendation_System.Web;
 
-public class UserApiClient(HttpClient httpClient,IHttpContextAccessor httpContextAccessor)
+public class UserApiClient(HttpClient httpClient)
 {
     public async Task<HttpResponseMessage> RegisterAsync(RegisterRequest model)
         => await httpClient.PostAsJsonAsync("/User/register", model);
@@ -17,7 +17,7 @@ public class UserApiClient(HttpClient httpClient,IHttpContextAccessor httpContex
     => await httpClient.PostAsJsonAsync($"/User/login?useCookies={useCookies.ToString().ToLower()}", model);
 
     public async Task<HttpResponseMessage> LogoutAsync(bool useCookies = false)
-   =>await httpClient.PostAsync($"/User/logout?useCookies={useCookies.ToString().ToLower()}", null);
+   => await httpClient.PostAsync($"/User/logout?useCookies={useCookies.ToString().ToLower()}", null);
 
     public async Task<HttpResponseMessage> ForgotPasswordAsync(ForgotPasswordRequest model)
         => await httpClient.PostAsJsonAsync("/User/forgotPassword", model);
@@ -59,6 +59,18 @@ public class UserApiClient(HttpClient httpClient,IHttpContextAccessor httpContex
 
     public async Task<HttpResponseMessage> UpdateUserInfoAsync(InfoRequest model)
         => await httpClient.PostAsJsonAsync("/User/manage/info", model);
+
+    public async Task<HttpResponseMessage> VerifyResetCodeAsync(VerifyResetCodeRequest model)
+        => await httpClient.PostAsJsonAsync("/User/verifyResetCode", model);
+
+    public async Task<HttpResponseMessage> SendRevalidateEmailAsync(ResendConfirmationEmailRequest model)
+        => await httpClient.PostAsJsonAsync("/User/manage/sendRevalidateEmail", model);
+
+    public async Task<HttpResponseMessage> RevalidateUserByLinkAsync(string userId, string code)
+        => await httpClient.GetAsync($"/User/manage/revalidate?userId={Uri.EscapeDataString(userId)}&code={Uri.EscapeDataString(code)}");
+
+    public async Task<HttpResponseMessage> GenerateTwoFactorSetupCodeAsync()
+        => await httpClient.GetAsync("/User/manage/setup2fa");
 }
 
 public class RegisterRequest
@@ -69,9 +81,12 @@ public class RegisterRequest
 
 public class LoginRequest
 {
-    public string Email { get; set; } = default!;
-    public string Password { get; set; } = default!;
+    public string Email { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public string? TwoFactorCode { get; set; }
+    public string? TwoFactorRecoveryCode { get; set; }
 }
+
 
 public class ForgotPasswordRequest
 {
@@ -110,4 +125,10 @@ public class InfoRequest
     public string? NewEmail { get; set; }
     public string? OldPassword { get; set; }
     public string? NewPassword { get; set; }
+}
+
+public class VerifyResetCodeRequest
+{
+    public string Email { get; set; } = default!;
+    public string ResetCode { get; set; } = default!;
 }

@@ -1,4 +1,11 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+﻿@using Recommendation_System.Web.Components.Layout
+@rendermode InteractiveServer
+@code {
+    [Parameter]
+    public List<MainLayout.NavItem> Items { get; set; } = new();
+}
+
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">Recommendation_System</a>
     </div>
@@ -8,22 +15,55 @@
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
+        @if (Items != null && Items.Count > 0)
+        {
+            @foreach (var item in Items)
+            {
+                @* Render top-level item *@
+                <div class="nav-item px-3">
+                    @if (item.Children != null && item.Children.Count > 0)
+                    {
+                        <div class="dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                @if (!string.IsNullOrEmpty(item.Icon))
+                                {
+                                    <span class="bi @item.Icon" aria-hidden="true"></span>
+                                }
+                                @item.Title
+                            </a>
+                            <ul class="dropdown-menu">
+                                @foreach (var child in item.Children)
+                                {
+                                    <li>
+                                        <NavLink class="dropdown-item" href="@child.Url" Match="NavLinkMatch.All">
+                                            @if (!string.IsNullOrEmpty(child.Icon))
+                                            {
+                                                <span class="bi @child.Icon" aria-hidden="true"></span>
+                                            }
+                                            @child.Title
+                                        </NavLink>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
+                    }
+                    else
+                    {
+                        <NavLink class="nav-link" href="@item.Url" Match="NavLinkMatch.All">
+                            @if (!string.IsNullOrEmpty(item.Icon))
+                            {
+                                <span class="bi @item.Icon" aria-hidden="true"></span>
+                            }
+                            @item.Title
+                        </NavLink>
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            <div class="nav-item px-3 text-muted">No navigation items</div>
+        }
     </nav>
 </div>

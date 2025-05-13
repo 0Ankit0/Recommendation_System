@@ -2,38 +2,47 @@
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
+<div class="page d-flex">
+    <div class="sidebar bg-light border-end @(@sidebarCollapsed ? "d-none" : "d-block")" style="min-width:220px;">
+        <button class="btn btn-outline-secondary w-100 mb-3 d-md-none" @onclick="ToggleSidebar" title="Toggle sidebar">
+            <i class="bi @(sidebarCollapsed ? "bi-chevron-right" : "bi-chevron-left")"></i>
+        </button>
+        <NavMenu Items="navItems" />
     </div>
 
-    <main>
-        <div class="top-row px-4">
-            @if (isAuthenticated)
-            {
-                <div class="dropdown">
-                    <button class="btn btn-secondary dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-person-circle"></i> <!-- User icon -->
-                    </button>
-                    <ul class="dropdown-menu" aria-labelledby="userDropdown">
-                        <li><a class="dropdown-item" href="/Settings">Settings</a></li>
-                        <li><a class="dropdown-item" href="/Logout">Logout</a></li>
-                    </ul>
-                </div>
-            }
-            else
-            {
-                <a class="btn btn-primary" href="/Login">Login</a>
-            }
-        </div>
+    <main class="flex-grow-1">
+        <nav class="navbar navbar-expand navbar-light bg-white border-bottom px-4">
+            <button class="btn btn-outline-secondary d-md-none me-2" @onclick="ToggleSidebar" title="Toggle sidebar">
+                <i class="bi @(sidebarCollapsed ? "bi-list" : "bi-x")"></i>
+            </button>
+            <div class="ms-auto">
+                @if (isAuthenticated)
+                {
+                    <div class="dropdown">
+                        <button class="btn btn-secondary dropdown-toggle" type="button" id="userDropdown"
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-circle"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                            <li><a class="dropdown-item" href="/Settings">Settings</a></li>
+                            <li><a class="dropdown-item" href="/Logout">Logout</a></li>
+                        </ul>
+                    </div>
+                }
+                else
+                {
+                    <a class="btn btn-primary" href="/Login">Login</a>
+                }
+            </div>
+        </nav>
 
-        <article class="content px-4">
+        <article class="content px-4 py-3">
             @Body
         </article>
     </main>
 </div>
 
-<div id="blazor-error-ui">
+<div id="blazor-error-ui" class="alert alert-danger position-fixed bottom-0 end-0 m-3" style="z-index: 2000;">
     An unhandled error has occurred.
     <a href="" class="reload">Reload</a>
     <a class="dismiss">🗙</a>
@@ -41,10 +50,42 @@
 
 @code {
     private bool isAuthenticated;
+    private bool sidebarCollapsed = false;
+
+    // Multi-level nav items example
+    private List<NavItem> navItems = new()
+{
+new NavItem { Title = "Home", Url = "/", Icon = "bi-house" },
+new NavItem { Title = "Bookings", Url = "/bookings", Icon = "bi-calendar-check" },
+new NavItem
+{
+Title = "Management",
+Icon = "bi-gear",
+Children = new List<NavItem>
+{
+new NavItem { Title = "Users", Url = "/management/users", Icon = "bi-people" },
+new NavItem { Title = "Roles", Url = "/management/roles", Icon = "bi-shield-lock" }
+}
+},
+new NavItem { Title = "Profile", Url = "/profile", Icon = "bi-person" }
+};
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
+    }
+
+    private void ToggleSidebar()
+    {
+        sidebarCollapsed = !sidebarCollapsed;
+    }
+
+    public class NavItem
+    {
+        public string Title { get; set; } = "";
+        public string Url { get; set; } = "";
+        public string? Icon { get; set; }
+        public List<NavItem>? Children { get; set; }
     }
 }
