@@ -72,6 +72,22 @@ new NavItem { Title = "Profile", Url = "/profile", Icon = "bi-person" }
 
     protected override async Task OnInitializedAsync()
     {
+        await UpdateAuthState();
+        // Subscribe to authentication state changes if using a custom provider
+        if (AuthenticationStateProvider is CustomAuthStateProvider customProvider)
+        {
+            customProvider.AuthenticationStateChanged += OnAuthStateChanged;
+        }
+    }
+
+    private async void OnAuthStateChanged(Task<AuthenticationState> task)
+    {
+        await UpdateAuthState();
+        StateHasChanged();
+    }
+
+    private async Task UpdateAuthState()
+    {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
     }
@@ -88,4 +104,14 @@ new NavItem { Title = "Profile", Url = "/profile", Icon = "bi-person" }
         public string? Icon { get; set; }
         public List<NavItem>? Children { get; set; }
     }
+
+    // Unsubscribe on dispose to avoid memory leaks
+    public void Dispose()
+    {
+        if (AuthenticationStateProvider is CustomAuthStateProvider customProvider)
+        {
+            customProvider.AuthenticationStateChanged -= OnAuthStateChanged;
+        }
+    }
+}
 }

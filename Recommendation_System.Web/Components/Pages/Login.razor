@@ -2,12 +2,12 @@
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Authentication.BearerToken
 @using System.Text.Json
-@inject HttpClient Http
 @inject UserApiClient userApi
 @inject NavigationManager Navigation
 @inject TokenService tokenService
 @rendermode InteractiveServer
 @inject IHttpContextAccessor httpContextAccessor
+@inject CustomAuthStateProvider AuthProvider
 
 <div class="container mt-5">
     <div class="row justify-content-center">
@@ -19,19 +19,21 @@
                         <DataAnnotationsValidator />
                         <ValidationSummary />
 
-                        <div class="mb-3">
-                            <label for="email" class="form-label">Email</label>
-                            <InputText id="email" class="form-control" @bind-Value="loginModel.Email"
-                                disabled="@isTwoFactorRequired" />
-                            <ValidationMessage For="@(() => loginModel.Email)" />
-                        </div>
+                        @if (!isTwoFactorRequired)
+                        {
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email</label>
+                                <InputText id="email" class="form-control" @bind-Value="loginModel.Email" />
+                                <ValidationMessage For="@(() => loginModel.Email)" />
+                            </div>
 
-                        <div class="mb-3">
-                            <label for="password" class="form-label">Password</label>
-                            <InputText id="password" type="password" class="form-control"
-                                @bind-Value="loginModel.Password" disabled="@isTwoFactorRequired" />
-                            <ValidationMessage For="@(() => loginModel.Password)" />
-                        </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Password</label>
+                                <InputText id="password" type="password" class="form-control"
+                                    @bind-Value="loginModel.Password" />
+                                <ValidationMessage For="@(() => loginModel.Password)" />
+                            </div>
+                        }
 
                         @if (isTwoFactorRequired)
                         {
@@ -101,6 +103,7 @@
                 isTwoFactorRequired = true;
                 formTitle = "Two-Factor Authentication";
                 submitButtonText = "Verify";
+                isLoading = false;
                 return;
             }
 
@@ -112,6 +115,8 @@
                 if (tokenData != null && deviceId != null)
                 {
                     await tokenService.SetTokenAsync(deviceId, tokenData.AccessToken, TimeSpan.FromDays(30));
+                    // Mark user as authenticated
+                    AuthProvider.MarkUserAsAuthenticated(loginModel.Email);
                     Navigation.NavigateTo("/");
                 }
             }
