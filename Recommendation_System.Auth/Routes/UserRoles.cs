@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Recommendation_System.Auth.Routes;
 
-public class UserRolesApiEndpoints 
+public class UserRolesApiEndpoints
 {
     public void MapEndpoint(IEndpointRouteBuilder endpoints)
     {
@@ -171,15 +171,14 @@ public class UserRolesApiEndpoints
     internal async Task<Results<Ok<string>, ProblemHttpResult>> RemoveUserRole(
         [FromServices] RoleManager<Role> roleManager,
         [FromServices] UserManager<User> userManager,
-        string userId,
         [FromBody] UserRole userRoleDto)
     {
         try
         {
-            var user = await userManager.FindByIdAsync(userId);
+            var user = await userManager.FindByIdAsync(userRoleDto.UserId);
             if (user == null)
             {
-                return TypedResults.Problem($"User with ID {userId} not found.", statusCode: StatusCodes.Status404NotFound);
+                return TypedResults.Problem($"User with ID {userRoleDto.UserId} not found.", statusCode: StatusCodes.Status404NotFound);
             }
 
             var role = await roleManager.FindByIdAsync(userRoleDto.RoleId);
