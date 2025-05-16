@@ -111,12 +111,12 @@
             {
                 var content = await response.Content.ReadAsStringAsync();
                 var tokenData = JsonSerializer.Deserialize<AccessTokenResponse>(content);
-                var deviceId = httpContextAccessor?.HttpContext?.Request.Headers["DeviceId"].ToString();
+                var deviceId = httpContextAccessor?.HttpContext?.Request.Headers["X-Device-Id"].ToString();
                 if (tokenData != null && deviceId != null)
                 {
-                    await tokenService.SetTokenAsync(deviceId, tokenData.AccessToken, TimeSpan.FromDays(30));
+                    await tokenService.SetTokenAsync(deviceId, content, TimeSpan.FromDays(30));
                     // Mark user as authenticated
-                    AuthProvider.MarkUserAsAuthenticated(loginModel.Email);
+                    await AuthProvider.MarkUserAsAuthenticated(loginModel.Email);
                     Navigation.NavigateTo("/");
                 }
             }
