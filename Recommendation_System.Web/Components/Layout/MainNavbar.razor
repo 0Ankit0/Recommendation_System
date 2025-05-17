@@ -1,0 +1,65 @@
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@rendermode InteractiveServer
+
+<nav class="navbar navbar-expand navbar-light bg-white border-bottom px-4">
+    <button class="btn btn-outline-secondary d-md-none me-2" @onclick="ToggleSidebar" title="Toggle sidebar">
+        <i class="bi @(SidebarCollapsed ? "bi-list" : "bi-x")"></i>
+    </button>
+    <div class="ms-auto">
+        @if (isAuthenticated)
+        {
+            <div class="dropdown">
+                <button class="btn btn-secondary dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown"
+                    aria-expanded="false">
+                    <i class="bi bi-person-circle"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                    <li><a class="dropdown-item" href="/Settings">Settings</a></li>
+                    <li><a class="dropdown-item" href="/Logout">Logout</a></li>
+                </ul>
+            </div>
+        }
+        else
+        {
+            <a class="btn btn-primary" href="/Login">Login</a>
+        }
+    </div>
+</nav>
+
+@code {
+    [Parameter]
+    public bool SidebarCollapsed { get; set; }
+
+    [Parameter]
+    public EventCallback ToggleSidebar { get; set; }
+
+    private bool isAuthenticated;
+
+    protected override void OnInitialized()
+    {
+        AuthenticationStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
+        _ = UpdateAuthStateAsync();
+    }
+
+    private async Task UpdateAuthStateAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
+        StateHasChanged();
+    }
+
+    private void OnAuthStateChanged(Task<AuthenticationState> task)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            var authState = await task;
+            isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        AuthenticationStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
+    }
+}
