@@ -1,10 +1,17 @@
+using Microsoft.EntityFrameworkCore;
 using Recommendation_System.Auth.Infrastructure;
+using Recommendation_System.Data;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
+
+//Add postgres db context
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
+    b => b.MigrationsAssembly("Recommendation_System.Data")));
 
 // Add services to the container.
 builder.Services.AddProblemDetails();
@@ -38,7 +45,7 @@ builder.Services.AddOpenApi(options =>
     });
 });
 
-builder.Services.AddAuthConfig(builder.Configuration);
+// builder.Services.AddAuthConfig(builder.Configuration);
 
 var app = builder.Build();
 
