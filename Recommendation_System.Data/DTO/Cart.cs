@@ -12,7 +12,7 @@ public class Cart
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Owner
-    public Guid UserId { get; set; }
+    public required string UserId { get; set; }
     [ForeignKey(nameof(UserId))]
     public User User { get; set; } = null!;
 
