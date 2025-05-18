@@ -8,11 +8,16 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Recommendation_System.Auth\Recommendation_System.Auth.csproj" />
+    <ProjectReference Include="..\Recommendation_System.Data\Recommendation_System.Data.csproj" />
     <ProjectReference Include="..\Recommendation_System.ServiceDefaults\Recommendation_System.ServiceDefaults.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Scalar.AspNetCore" Version="2.2.7" />
   </ItemGroup>
 

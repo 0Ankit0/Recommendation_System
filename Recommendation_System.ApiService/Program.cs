@@ -12,6 +12,8 @@ builder.AddServiceDefaults();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
     b => b.MigrationsAssembly("Recommendation_System.Data")));
+//dotnet ef migrations add MigrationName --project Recommendation_System.Data --startup-project Recommendation_System.ApiService
+//dotnet ef database update --project Recommendation_System.Data --startup-project Recommendation_System.ApiService
 
 // Add services to the container.
 builder.Services.AddProblemDetails();
