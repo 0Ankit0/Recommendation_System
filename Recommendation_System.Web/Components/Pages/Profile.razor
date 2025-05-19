@@ -1,0 +1,25 @@
+﻿@page "/profile"
+@inject AuthenticationStateProvider AuthStateProvider
+
+<h3>Profile</h3>
+
+<AuthorizeView>
+    <Authorized>
+        @if (authState is not null)
+        {
+            <p>Welcome, @authState.User.Identity?.Name!</p>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <p class="text-danger">You are not authorized to view this page.</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private AuthenticationState? authState;
+
+    protected override async Task OnInitializedAsync()
+    {
+        authState = await AuthStateProvider.GetAuthenticationStateAsync();
+    }
+}
