@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Category\" />
+    <Folder Include="Infrastructure\" />
   </ItemGroup>
 
 </Project>
