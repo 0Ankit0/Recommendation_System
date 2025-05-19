@@ -8,6 +8,9 @@ public class AppDbContext : DbContext
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
     }
+    public AppDbContext() : base()
+    {
+    }
 
     public DbSet<Address> Addresses { get; set; }
     public DbSet<Category> Categories { get; set; }
