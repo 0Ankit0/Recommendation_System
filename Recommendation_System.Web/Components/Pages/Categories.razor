@@ -1,0 +1,139 @@
+﻿@page "/categories"
+@inject CategoryApiClient CategoryApi
+
+<h3>Categories</h3>
+
+@if (isLoading)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <button class="btn btn-primary mb-3" @onclick="ShowAddForm">Add Category</button>
+
+    @if (showForm)
+    {
+        <EditForm Model="categoryModel" OnValidSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label>Name</label>
+                <InputText class="form-control" @bind-Value="categoryModel.Name" />
+            </div>
+            <div class="mb-3">
+                <label>Parent Category</label>
+                <InputSelect class="form-select" @bind-Value="categoryModel.ParentCategoryId">
+                    <option value="">-- None --</option>
+                    @foreach (var cat in categories)
+                    {
+                        <option value="@cat.Id">@cat.Name</option>
+                    }
+                </InputSelect>
+            </div>
+            <button type="submit" class="btn btn-success me-2">@(editId == null ? "Add" : "Update")</button>
+            <button type="button" class="btn btn-secondary" @onclick="HideForm">Cancel</button>
+        </EditForm>
+    }
+
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Subcategories</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var cat in categories)
+            {
+                <tr>
+                    <td>@cat.Name</td>
+                    <td>
+                        @if (cat.SubCategories != null && cat.SubCategories.Any())
+                        {
+                            <ul>
+                                @foreach (var sub in cat.SubCategories)
+                                {
+                                    <li>@sub.Name</li>
+                                }
+                            </ul>
+                        }
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-warning me-2" @onclick="() => EditCategory(cat)">Edit</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteCategory(cat.Id)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<CategoryResponse> categories = new();
+    private CategoryRequest categoryModel = new();
+    private bool isLoading = true;
+    private bool showForm = false;
+    private int? editId = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategories();
+    }
+
+    private async Task LoadCategories()
+    {
+        isLoading = true;
+        categories = await CategoryApi.GetAllAsync() ?? new();
+        isLoading = false;
+        showForm = false;
+        editId = null;
+        categoryModel = new();
+        StateHasChanged();
+    }
+
+    private void ShowAddForm()
+    {
+        showForm = true;
+        editId = null;
+        categoryModel = new();
+    }
+
+    private void HideForm()
+    {
+        showForm = false;
+        editId = null;
+        categoryModel = new();
+    }
+
+    private void EditCategory(CategoryResponse cat)
+    {
+        showForm = true;
+        editId = cat.Id;
+        categoryModel = new CategoryRequest
+        {
+            Name = cat.Name,
+            ParentCategoryId = null // You can enhance this if you want to support editing parent
+        };
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (editId == null)
+        {
+            await CategoryApi.CreateAsync(categoryModel);
+        }
+        else
+        {
+            await CategoryApi.UpdateAsync(editId.Value, categoryModel);
+        }
+        await LoadCategories();
+    }
+
+    private async Task DeleteCategory(int id)
+    {
+        await CategoryApi.DeleteAsync(id);
+        await LoadCategories();
+    }
+}
