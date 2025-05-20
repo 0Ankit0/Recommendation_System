@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Recommendation_System.Auth.Infrastructure;
 using Recommendation_System.Data;
+using Recommendation_System.ServiceDefaults.Infrastructure;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,9 +48,10 @@ builder.Services.AddOpenApi(options =>
     });
 });
 
-// builder.Services.AddAuthConfig(builder.Configuration);
-
+builder.Services.AddAuthConfig(builder.Configuration);
+builder.Services.AddEndpoints(typeof(Program).Assembly);
 var app = builder.Build();
+
 
 // Configure the HTTP request pipeline.
 app.UseExceptionHandler();
