@@ -15,7 +15,7 @@ public class Categories : IEndpoint
 
         // Get all categories (with subcategories, no ParentCategoryId in response)
         group.MapGet("/", async (AppDbContext db) =>
-            await db.Categories
+            await db.Categories.AsNoTracking()
                 .Where(c => c.ParentCategoryId == null)
                 .Select(c => new CategoryResponse
                 {
@@ -34,7 +34,7 @@ public class Categories : IEndpoint
 
         // Get category by id (with subcategories, no ParentCategoryId in response)
         group.MapGet("/{id:int}", async (int id, AppDbContext db) =>
-            await db.Categories
+            await db.Categories.AsNoTracking()
                 .Where(c => c.CategoryId == id)
                 .Select(c => new CategoryResponse
                 {
