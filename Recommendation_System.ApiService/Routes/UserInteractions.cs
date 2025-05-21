@@ -13,10 +13,24 @@ public class UserInteractions : IEndpoint
         var group = app.MapGroup("/api/userinteractions");
 
         group.MapGet("/", async (AppDbContext db) =>
-            await db.Set<UserInteraction>().ToListAsync());
+            await db.Set<UserInteraction>().AsNoTracking().Select(ui => new UserInteractionResponse
+            {
+                Id = ui.Id,
+                UserId = ui.UserId,
+                ProductId = ui.ProductId,
+                InteractionType = ui.InteractionType.ToString(),
+                Metadata = ui.Metadata
+            }).ToListAsync());
 
         group.MapGet("/{id:int}", async (int id, AppDbContext db) =>
-            await db.Set<UserInteraction>().FindAsync(id));
+            await db.Set<UserInteraction>().AsNoTracking().Where(ui => ui.Id == id).Select(ui => new UserInteractionResponse
+            {
+                Id = ui.Id,
+                UserId = ui.UserId,
+                ProductId = ui.ProductId,
+                InteractionType = ui.InteractionType.ToString(),
+                Metadata = ui.Metadata
+            }).FirstOrDefaultAsync());
 
         group.MapPost("/", async (UserInteractionRequest req, AppDbContext db) =>
         {
@@ -29,7 +43,15 @@ public class UserInteractions : IEndpoint
             };
             db.Add(entity);
             await db.SaveChangesAsync();
-            return Results.Created($"/api/userinteractions/{entity.Id}", entity);
+            var response = new UserInteractionResponse
+            {
+                Id = entity.Id,
+                UserId = entity.UserId,
+                ProductId = entity.ProductId,
+                InteractionType = entity.InteractionType.ToString(),
+                Metadata = entity.Metadata
+            };
+            return Results.Created($"/api/userinteractions/{entity.Id}", response);
         });
     }
 }
