@@ -12,10 +12,22 @@ public class Payments : IEndpoint
         var group = app.MapGroup("/api/payments");
 
         group.MapGet("/", async (AppDbContext db) =>
-            await db.Set<Payment>().ToListAsync());
+            await db.Set<Payment>().AsNoTracking().Select(p => new PaymentResponse
+            {
+                PaymentId = p.PaymentId,
+                Amount = p.Amount,
+                Provider = p.Provider,
+                OrderId = p.OrderId
+            }).ToListAsync());
 
         group.MapGet("/{id:int}", async (int id, AppDbContext db) =>
-            await db.Set<Payment>().FindAsync(id));
+            await db.Set<Payment>().AsNoTracking().Where(p => p.PaymentId == id).Select(p => new PaymentResponse
+            {
+                PaymentId = p.PaymentId,
+                Amount = p.Amount,
+                Provider = p.Provider,
+                OrderId = p.OrderId
+            }).FirstOrDefaultAsync());
 
         group.MapPost("/", async (PaymentRequest req, AppDbContext db) =>
         {
@@ -27,7 +39,14 @@ public class Payments : IEndpoint
             };
             db.Add(entity);
             await db.SaveChangesAsync();
-            return Results.Created($"/api/payments/{entity.PaymentId}", entity);
+            var response = new PaymentResponse
+            {
+                PaymentId = entity.PaymentId,
+                Amount = entity.Amount,
+                Provider = entity.Provider,
+                OrderId = entity.OrderId
+            };
+            return Results.Created($"/api/payments/{entity.PaymentId}", response);
         });
     }
 }
