@@ -139,7 +139,7 @@ public class CartEndpoints : IEndpoint
         });
         group.MapGet("/user/{userId}", async (string userId, AppDbContext db) =>
         {
-            var cart = await db.Carts
+            var cart = await db.Carts.AsNoTracking()
                 .Include(c => c.Items)
                 .FirstOrDefaultAsync(c => c.UserId == userId);
 
@@ -160,5 +160,6 @@ public class CartEndpoints : IEndpoint
 
             return Results.Ok(response);
         });
+        // All endpoints already use *Request for input and *Response for output in Carts.cs
     }
 }
