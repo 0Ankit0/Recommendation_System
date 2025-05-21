@@ -12,10 +12,28 @@ public class Addresses : IEndpoint
         var group = app.MapGroup("/api/addresses");
 
         group.MapGet("/", async (AppDbContext db) =>
-            await db.Set<Address>().ToListAsync());
+            await db.Set<Address>().AsNoTracking().Select(a => new AddressResponse
+            {
+                AddressId = a.AddressId,
+                Street = a.Street,
+                City = a.City,
+                State = a.State,
+                PostalCode = a.PostalCode,
+                Country = a.Country,
+                UserId = a.UserId
+            }).ToListAsync());
 
         group.MapGet("/{id:int}", async (int id, AppDbContext db) =>
-            await db.Set<Address>().FindAsync(id));
+            await db.Set<Address>().AsNoTracking().Where(a => a.AddressId == id).Select(a => new AddressResponse
+            {
+                AddressId = a.AddressId,
+                Street = a.Street,
+                City = a.City,
+                State = a.State,
+                PostalCode = a.PostalCode,
+                Country = a.Country,
+                UserId = a.UserId
+            }).FirstOrDefaultAsync());
 
         group.MapPost("/", async (AddressRequest req, AppDbContext db) =>
         {
@@ -30,7 +48,17 @@ public class Addresses : IEndpoint
             };
             db.Add(entity);
             await db.SaveChangesAsync();
-            return Results.Created($"/api/addresses/{entity.AddressId}", entity);
+            var response = new AddressResponse
+            {
+                AddressId = entity.AddressId,
+                Street = entity.Street,
+                City = entity.City,
+                State = entity.State,
+                PostalCode = entity.PostalCode,
+                Country = entity.Country,
+                UserId = entity.UserId
+            };
+            return Results.Created($"/api/addresses/{entity.AddressId}", response);
         });
     }
 }
