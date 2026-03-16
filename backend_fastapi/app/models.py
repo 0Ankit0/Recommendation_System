@@ -30,6 +30,16 @@ class InteractionType(str, enum.Enum):
     Review = "Review"
 
 
+class User(Base):
+    __tablename__ = "users"
+    user_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Address(Base):
     __tablename__ = "addresses"
     address_id: Mapped[int] = mapped_column(Integer, primary_key=True)
