@@ -16,11 +16,11 @@ class RecommendationDataSource(Protocol):
 
     def list_products(self) -> list[Product]: ...
 
-    def list_user_interactions(self, user_id: int) -> list[UserEvent]: ...
+    def list_user_interactions(self, user_id: str) -> list[UserEvent]: ...
 
-    def list_cart_items(self, user_id: int) -> list[CartItem]: ...
+    def list_cart_items(self, user_id: str) -> list[CartItem]: ...
 
-    def list_order_items(self, user_id: int) -> list[OrderItem]: ...
+    def list_order_items(self, user_id: str) -> list[OrderItem]: ...
 
 
 @dataclass
@@ -30,19 +30,21 @@ class RecommendationService:
 
     def recommend_for_user(
         self,
-        user_id: int,
+        user_id: str | int,
         top_k: int = 10,
         candidate_product_ids: list[int] | None = None,
         exclude_product_ids: list[int] | None = None,
+        **kwargs,
     ) -> list[RecommendationResult]:
         payload = RecommendationRequest(
-            user_id=user_id,
+            user_id=str(user_id),
             top_k=top_k,
             products=self.data_source.list_products(),
-            interactions=self.data_source.list_user_interactions(user_id),
-            cart_items=self.data_source.list_cart_items(user_id),
-            order_items=self.data_source.list_order_items(user_id),
+            interactions=self.data_source.list_user_interactions(str(user_id)),
+            cart_items=self.data_source.list_cart_items(str(user_id)),
+            order_items=self.data_source.list_order_items(str(user_id)),
             candidate_product_ids=candidate_product_ids,
             exclude_product_ids=exclude_product_ids or [],
+            **kwargs,
         )
         return self.engine.recommend(payload)
