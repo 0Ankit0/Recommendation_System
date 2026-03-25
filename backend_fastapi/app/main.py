@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+import uuid
+from datetime import UTC, datetime
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
@@ -29,7 +30,7 @@ from .models import (
     UserInteraction,
     UserPreference,
 )
-from .recommendation_service import SQLRecommendationService
+from .recommendation_service import SQLRecommendationService, generate_experiment_salt
 from .schemas import (
     AddCartItemRequest,
     AddressRequest,
@@ -278,8 +279,10 @@ def get_payment(payment_id: int, db: Session = Depends(get_db)):
 @app.post("/api/payments", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
 def create_payment(req: PaymentRequest, db: Session = Depends(get_db)):
     order = _get_order_or_404(db, req.order_id)
-    if Decimal(str(req.amount)) > Decimal(str(order.total_amount)):
-        raise HTTPException(status_code=400, detail="Payment amount exceeds order total")
+    payment_amount = _money_decimal(req.amount)
+    order_amount = _money_decimal(order.total_amount)
+    if abs(payment_amount - order_amount) >= Decimal("0.01"):
+        raise HTTPException(status_code=400, detail="Payment amount must match the order total exactly")
     payment = Payment(**req.model_dump())
     db.add(payment)
     db.commit()
@@ -379,13 +382,23 @@ def create_order(req: OrderRequest, db: Session = Depends(get_db)):
     for item in req.order_items:
         product = _get_product_or_404(db, item.product_id)
         if item.quantity > product.stock_quantity:
-            raise HTTPException(status_code=400, detail=f"Insufficient stock for product {product.product_id}")
-        expected_price = Decimal(str(product.price)).quantize(Decimal("0.01"))
-        if Decimal(str(item.unit_price)).quantize(Decimal("0.01")) != expected_price:
-            raise HTTPException(status_code=400, detail=f"Unit price mismatch for product {product.product_id}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient stock for product {product.product_id}: {item.quantity} requested, {product.stock_quantity} available",
+            )
+        expected_price = _money_decimal(product.price)
+        provided_price = _money_decimal(item.unit_price)
+        if provided_price != expected_price:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Unit price mismatch for product {product.product_id}: "
+                    f"expected {expected_price}, got {provided_price}"
+                ),
+            )
         line_total += expected_price * item.quantity
 
-    if line_total != Decimal(str(req.total_amount)).quantize(Decimal("0.01")):
+    if line_total != _money_decimal(req.total_amount):
         raise HTTPException(status_code=400, detail="Order total does not match order items")
 
     order = Order(user_id=req.user_id, total_amount=req.total_amount, shipping_address_id=req.shipping_address_id)
@@ -479,7 +492,7 @@ def create_interaction(req: UserInteractionRequest, db: Session = Depends(get_db
         user_id=req.user_id,
         product_id=req.product_id,
         interaction_type=interaction_type,
-        metadata=req.metadata,
+        interaction_metadata=req.metadata,
     )
     db.add(interaction)
     db.commit()
@@ -490,7 +503,7 @@ def create_interaction(req: UserInteractionRequest, db: Session = Depends(get_db
 @app.post("/v1/events", response_model=EventAcceptedResponse, status_code=status.HTTP_202_ACCEPTED)
 def ingest_event(req: EventRequest, db: Session = Depends(get_db)):
     _get_product_or_404(db, req.item_id)
-    event_id = req.event_id or f"evt-{datetime.utcnow().timestamp():.0f}-{req.user_id}-{req.item_id}"
+    event_id = req.event_id or _new_event_id(req.user_id, req.item_id)
     existing = db.query(UserInteraction).filter(UserInteraction.external_event_id == event_id).first()
     if existing:
         return EventAcceptedResponse(eventId=event_id, status="accepted")
@@ -499,8 +512,8 @@ def ingest_event(req: EventRequest, db: Session = Depends(get_db)):
         user_id=req.user_id,
         product_id=req.item_id,
         interaction_type=_parse_interaction_type(req.action_type),
-        interaction_time=req.timestamp or datetime.utcnow(),
-        metadata=json.dumps(req.context),
+        interaction_time=req.timestamp or datetime.now(UTC).replace(tzinfo=None),
+        interaction_metadata=json.dumps(req.context),
         external_event_id=event_id,
     )
     db.add(interaction)
@@ -589,7 +602,7 @@ def train_model(req: TrainModelRequest, db: Session = Depends(get_db)):
         algorithm=req.algorithm,
         status="completed",
         message=json.dumps(metadata),
-        completed_at=datetime.utcnow(),
+        completed_at=datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(job)
     db.commit()
@@ -614,7 +627,7 @@ def create_experiment(req: ExperimentRequest, db: Session = Depends(get_db)):
     running = db.query(Experiment).filter(Experiment.status == "running").all()
     for experiment in running:
         experiment.status = "concluded"
-        experiment.ended_at = datetime.utcnow()
+        experiment.ended_at = datetime.now(UTC).replace(tzinfo=None)
 
     experiment = Experiment(
         name=req.name,
@@ -623,6 +636,7 @@ def create_experiment(req: ExperimentRequest, db: Session = Depends(get_db)):
             {
                 "metrics": req.metrics,
                 "trafficSplit": req.traffic_split.model_dump(),
+                "salt": generate_experiment_salt(),
             }
         ),
     )
@@ -748,7 +762,7 @@ def serialize_interaction(interaction: UserInteraction) -> UserInteractionRespon
         user_id=interaction.user_id,
         product_id=interaction.product_id,
         interaction_type=interaction.interaction_type.value,
-        metadata=interaction.metadata,
+        metadata=interaction.interaction_metadata,
     )
 
 
@@ -827,4 +841,12 @@ def _get_order_or_404(db: Session, order_id: str) -> Order:
 
 
 def _money(value) -> float:
-    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    return float(_money_decimal(value))
+
+
+def _money_decimal(value) -> Decimal:
+    return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _new_event_id(user_id: str, item_id: int) -> str:
+    return f"evt-{user_id}-{item_id}-{uuid.uuid4().hex}"

@@ -50,21 +50,22 @@ export default function HomePage() {
       .filter((row): row is { recommendation: RecommendationEnvelope['recommendations'][number]; product: Product } => Boolean(row.product));
   }, [products, recommendations]);
 
-  const loadDashboard = useCallback(async (nextUserId: string) => {
+  const loadDashboard = useCallback(async (nextUserId: string, algorithm?: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const [categoryRows, productRows, cartRow, preferenceRow, recommendationRow] = await Promise.all([
+      const [categoryRows, productRows, cartRow, preferenceRow] = await Promise.all([
         fetchCategories(),
         fetchProducts(),
         fetchCart(nextUserId),
-        fetchPreferences(nextUserId),
-        fetchRecommendations(nextUserId, {
-          algorithm: preference.algorithm || undefined,
-          limit: 8,
-          explain: true
-        })
+        fetchPreferences(nextUserId)
       ]);
+      const resolvedAlgorithm = preferenceRow.algorithm || algorithm || 'hybrid';
+      const recommendationRow = await fetchRecommendations(nextUserId, {
+        algorithm: resolvedAlgorithm,
+        limit: 8,
+        explain: true
+      });
 
       setCategories(categoryRows);
       setProducts(productRows);
@@ -83,7 +84,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [preference.algorithm]);
+  }, []);
 
   useEffect(() => {
     void loadDashboard(activeUserId);
@@ -103,7 +104,7 @@ export default function HomePage() {
       setError(null);
       await addToCart(activeUserId, productId, 1);
       await trackEvent({
-        eventId: `cart-${activeUserId}-${productId}-${Date.now()}`,
+        eventId: createEventId('cart', activeUserId, productId),
         userId: activeUserId,
         itemId: productId,
         actionType: 'cart',
@@ -120,7 +121,7 @@ export default function HomePage() {
   const onPreviewRecommendation = async (productId: number) => {
     try {
       await trackEvent({
-        eventId: `view-${activeUserId}-${productId}-${Date.now()}`,
+        eventId: createEventId('view', activeUserId, productId),
         userId: activeUserId,
         itemId: productId,
         actionType: 'view',
@@ -397,4 +398,16 @@ function flattenCategories(categories: Category[]): string[] {
 
   walk(categories);
   return Array.from(names).sort((left, right) => left.localeCompare(right));
+}
+
+function createEventId(action: string, userId: string, productId: number): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${action}-${userId}-${productId}-${crypto.randomUUID()}`;
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const buffer = new Uint32Array(4);
+    crypto.getRandomValues(buffer);
+    return `${action}-${userId}-${productId}-${Array.from(buffer, (value) => value.toString(16)).join('')}`;
+  }
+  return `${action}-${userId}-${productId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }

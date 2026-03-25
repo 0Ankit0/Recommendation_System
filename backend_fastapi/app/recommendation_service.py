@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from decimal import Decimal
 from math import log2
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from fastapi_recommendation import RecommendationEngine
@@ -61,7 +63,7 @@ class SQLRecommendationService:
         resolved_algorithm = algorithm or preference.algorithm or "hybrid"
         latest_model = selected_model or self._get_latest_model(resolved_algorithm)
         if latest_model:
-            latest_model.last_used_at = datetime.utcnow()
+            latest_model.last_used_at = datetime.now(UTC).replace(tzinfo=None)
             self.db.commit()
 
         payload = EngineRecommendationRequest(
@@ -118,7 +120,7 @@ class SQLRecommendationService:
     ) -> tuple[MLModel, dict]:
         interactions = self.db.query(UserInteraction).order_by(UserInteraction.interaction_time.asc()).all()
         metrics = self._evaluate_model(algorithm, interactions)
-        version = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        version = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         model = MLModel(
             algorithm=algorithm,
             version=f"{algorithm}-{version}",
@@ -146,6 +148,7 @@ class SQLRecommendationService:
         ndcg_total = 0.0
         diversity_total = 0.0
         evaluated_users = 0
+        total_recommended = 0
         covered_items: set[int] = set()
         products = self._list_products()
 
@@ -162,7 +165,7 @@ class SQLRecommendationService:
                     EngineUserEvent(
                         user_id=row.user_id,
                         product_id=row.product_id,
-                        event_type=row.interaction_type.value.lower(),
+                        event_type=_to_engine_event_type(row.interaction_type.value),
                         created_at=row.interaction_time,
                     )
                     for row in historical_rows
@@ -177,6 +180,7 @@ class SQLRecommendationService:
             evaluated_users += 1
             covered_items.update(result.product_id for result in recommendations)
             diversity_total += self._category_diversity(recommendations)
+            total_recommended += len(recommendations)
             ranked_ids = [result.product_id for result in recommendations]
             if holdout.product_id in ranked_ids:
                 hits += 1
@@ -187,7 +191,7 @@ class SQLRecommendationService:
             return {"precision@10": 0.0, "recall@10": 0.0, "ndcg@10": 0.0, "diversity": 0.0, "coverage": 0.0}
 
         return {
-            "precision@10": round(hits / (evaluated_users * 10), 4),
+            "precision@10": round(hits / max(total_recommended, 1), 4),
             "recall@10": round(hits / evaluated_users, 4),
             "ndcg@10": round(ndcg_total / evaluated_users, 4),
             "diversity": round(diversity_total / evaluated_users, 4),
@@ -224,11 +228,11 @@ class SQLRecommendationService:
             EngineUserEvent(
                 user_id=interaction.user_id,
                 product_id=interaction.product_id,
-                event_type=interaction.interaction_type.value.lower(),
+                event_type=_to_engine_event_type(interaction.interaction_type.value),
                 created_at=interaction.interaction_time.replace(tzinfo=timezone.utc)
                 if interaction.interaction_time.tzinfo is None
                 else interaction.interaction_time,
-                context=_json_loads(interaction.metadata, {}),
+                context=_json_loads(interaction.interaction_metadata, {}),
             )
             for interaction in interactions
         ]
@@ -275,14 +279,18 @@ class SQLRecommendationService:
             product.stock_quantity >= 0,
             bool(product.category_id),
         ]
-        return sum(checks) / len(checks)
+        return sum(checks) / max(len(checks), 1)
 
     def _resolve_category_preferences(self, categories_json: str) -> list[int]:
         category_names = [name.lower() for name in _json_loads(categories_json, [])]
         if not category_names:
             return []
-        rows = self.db.query(Category.category_id, Category.name).all()
-        return sorted({row.category_id for row in rows if row.name.lower() in category_names})
+        rows = (
+            self.db.query(Category.category_id)
+            .filter(func.lower(Category.name).in_(category_names))
+            .all()
+        )
+        return sorted({row.category_id for row in rows})
 
     def _get_latest_model(self, algorithm: str) -> MLModel | None:
         return (
@@ -302,12 +310,29 @@ class SQLRecommendationService:
 
     def _select_experiment_model(self, experiment: Experiment, user_id: str) -> tuple[MLModel, str]:
         variants = {variant.variant_name: variant for variant in experiment.variants}
-        bucket = self._bucket_user(user_id)
+        config = _json_loads(experiment.config_json, {})
+        bucket = self._bucket_user(user_id, config.get("salt", experiment.experiment_id))
         variant_name = "control" if bucket < variants["control"].traffic_percent else "variant"
         selected_variant = variants[variant_name]
         model = self.db.query(MLModel).filter(MLModel.model_id == selected_variant.model_id).first()
         return model, variant_name
 
-    def _bucket_user(self, user_id: str) -> float:
-        digest = hashlib.sha256(user_id.encode("utf-8")).hexdigest()
-        return int(digest[:8], 16) / 0xFFFFFFFF
+    def _bucket_user(self, user_id: str, salt: str) -> float:
+        digest = hashlib.sha256(f"{salt}:{user_id}".encode("utf-8")).hexdigest()
+        return int(digest[:8], 16) / (0xFFFFFFFF + 1)
+
+
+def generate_experiment_salt() -> str:
+    return uuid.uuid4().hex
+
+
+def _to_engine_event_type(value: str) -> str:
+    mapping = {
+        "View": "view",
+        "Click": "click",
+        "AddToCart": "cart",
+        "Purchase": "purchase",
+        "Search": "search",
+        "Review": "comment",
+    }
+    return mapping.get(value, value.lower())

@@ -8,6 +8,8 @@ from math import exp
 
 from .models import CartItem, OrderItem, Product, RecommendationRequest, RecommendationResult, UserEvent
 
+SECONDS_PER_DAY = 86400
+
 
 @dataclass(frozen=True)
 class EngineConfig:
@@ -271,7 +273,7 @@ class RecommendationEngine:
     def _recency_decay(self, created_at: datetime) -> float:
         now = datetime.now(timezone.utc)
         timestamp = created_at if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc)
-        elapsed_days = max((now - timestamp).days, 0)
+        elapsed_days = max((now - timestamp).total_seconds() / SECONDS_PER_DAY, 0)
         decay_factor = exp(-elapsed_days / max(self.config.recency_half_life_days, 1))
         return max(decay_factor, 0.05)
 

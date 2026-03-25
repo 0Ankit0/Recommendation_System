@@ -3,14 +3,24 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 AlgorithmType = Literal["collaborative", "content_based", "hybrid"]
 EventType = Literal["view", "click", "search", "comment", "cart", "purchase", "like", "save", "share"]
 
 
+def _normalize_user_id(value: str | int) -> str:
+    if value is None:
+        raise ValueError("user_id is required")
+    text = str(value).strip()
+    if not text:
+        raise ValueError("user_id must not be blank")
+    return text
+
+
 class Product(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     id: int = Field(gt=0)
     name: str = Field(min_length=1)
     category_id: int = Field(gt=0)
@@ -20,6 +30,7 @@ class Product(BaseModel):
 
 
 class UserEvent(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     user_id: str = Field(min_length=1)
     product_id: int = Field(gt=0)
     event_type: EventType
@@ -30,15 +41,11 @@ class UserEvent(BaseModel):
     @field_validator("user_id", mode="before")
     @classmethod
     def _normalize_user_id(cls, value: str | int) -> str:
-        if value is None:
-            raise ValueError("user_id is required")
-        text = str(value).strip()
-        if not text:
-            raise ValueError("user_id must not be blank")
-        return text
+        return _normalize_user_id(value)
 
 
 class CartItem(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     user_id: str = Field(min_length=1)
     product_id: int = Field(gt=0)
     created_at: datetime
@@ -46,10 +53,11 @@ class CartItem(BaseModel):
     @field_validator("user_id", mode="before")
     @classmethod
     def _normalize_user_id(cls, value: str | int) -> str:
-        return UserEvent._normalize_user_id(value)
+        return _normalize_user_id(value)
 
 
 class OrderItem(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     user_id: str = Field(min_length=1)
     product_id: int = Field(gt=0)
     created_at: datetime
@@ -57,10 +65,11 @@ class OrderItem(BaseModel):
     @field_validator("user_id", mode="before")
     @classmethod
     def _normalize_user_id(cls, value: str | int) -> str:
-        return UserEvent._normalize_user_id(value)
+        return _normalize_user_id(value)
 
 
 class RecommendationRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     user_id: str = Field(min_length=1)
     products: list[Product] = Field(min_length=1)
     interactions: list[UserEvent] = Field(default_factory=list)
@@ -82,7 +91,7 @@ class RecommendationRequest(BaseModel):
     @field_validator("user_id", mode="before")
     @classmethod
     def _normalize_user_id(cls, value: str | int) -> str:
-        return UserEvent._normalize_user_id(value)
+        return _normalize_user_id(value)
 
     @field_validator("candidate_product_ids")
     @classmethod
@@ -104,6 +113,7 @@ class RecommendationRequest(BaseModel):
 
 
 class RecommendationResult(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     product_id: int
     score: float
     reasons: list[str] = Field(default_factory=list)

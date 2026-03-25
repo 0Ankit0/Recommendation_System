@@ -127,7 +127,7 @@ class UserInteraction(Base):
     product_id: Mapped[int] = mapped_column(ForeignKey("products.product_id"), index=True)
     interaction_type: Mapped[InteractionType] = mapped_column(Enum(InteractionType))
     interaction_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
+    interaction_metadata: Mapped[str | None] = mapped_column("metadata", Text, nullable=True)
     embedding: Mapped[str | None] = mapped_column(Text, nullable=True)
     external_event_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
 

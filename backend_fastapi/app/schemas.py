@@ -11,7 +11,7 @@ EventActionType = Literal["view", "click", "search", "comment", "cart", "purchas
 
 
 class CamelModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
 
 class AddressRequest(BaseModel):
@@ -227,7 +227,7 @@ class TrafficSplit(CamelModel):
     @classmethod
     def _validate_split(cls, value: float, info) -> float:
         control = info.data.get("control", 0.0)
-        if round(control + value, 5) != 1.0:
+        if abs((control + value) - 1.0) > 1e-9:
             raise ValueError("trafficSplit must sum to 1.0")
         return value
 
