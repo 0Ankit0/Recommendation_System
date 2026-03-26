@@ -4,7 +4,7 @@ import hashlib
 import json
 import uuid
 from collections import defaultdict
-from datetime import UTC, datetime, timezone
+from datetime import timezone
 from decimal import Decimal
 from math import log2
 
@@ -17,7 +17,7 @@ from fastapi_recommendation.models import Product as EngineProduct
 from fastapi_recommendation.models import RecommendationResult
 from fastapi_recommendation.models import UserEvent as EngineUserEvent
 
-from .models import Cart, Category, Experiment, MLModel, Order, Product, UserInteraction, UserPreference
+from .models import Cart, Category, Experiment, MLModel, Order, Product, UserInteraction, UserPreference, utc_now
 from .schemas import UserPreferenceRequest
 
 
@@ -63,7 +63,7 @@ class SQLRecommendationService:
         resolved_algorithm = algorithm or preference.algorithm or "hybrid"
         latest_model = selected_model or self._get_latest_model(resolved_algorithm)
         if latest_model:
-            latest_model.last_used_at = datetime.now(UTC).replace(tzinfo=None)
+            latest_model.last_used_at = utc_now()
             self.db.commit()
 
         payload = EngineRecommendationRequest(
@@ -120,7 +120,7 @@ class SQLRecommendationService:
     ) -> tuple[MLModel, dict]:
         interactions = self.db.query(UserInteraction).order_by(UserInteraction.interaction_time.asc()).all()
         metrics = self._evaluate_model(algorithm, interactions)
-        version = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+        version = utc_now().strftime("%Y%m%d%H%M%S")
         model = MLModel(
             algorithm=algorithm,
             version=f"{algorithm}-{version}",
@@ -312,7 +312,7 @@ class SQLRecommendationService:
         variants = {variant.variant_name: variant for variant in experiment.variants}
         config = _json_loads(experiment.config_json, {})
         bucket = self._bucket_user(user_id, config.get("salt", experiment.experiment_id))
-        variant_name = "control" if bucket < variants["control"].traffic_percent else "variant"
+        variant_name = "control" if bucket <= variants["control"].traffic_percent else "variant"
         selected_variant = variants[variant_name]
         model = self.db.query(MLModel).filter(MLModel.model_id == selected_variant.model_id).first()
         return model, variant_name

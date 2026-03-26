@@ -1,9 +1,18 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
+
+
+def utc_now() -> datetime:
+    """Return a naive UTC timestamp for SQLAlchemy DateTime columns.
+
+    The app treats database datetimes as UTC, but the current schema stores them
+    without timezone metadata for broad backend/SQLite compatibility.
+    """
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class OrderStatus(str, enum.Enum):
@@ -55,7 +64,7 @@ class Product(Base):
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     price: Mapped[float] = mapped_column(Numeric(18, 2))
     stock_quantity: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.category_id"), index=True)
     images: Mapped[list["ProductImage"]] = relationship("ProductImage", cascade="all,delete", back_populates="product")
 
@@ -72,7 +81,7 @@ class ProductImage(Base):
 class Cart(Base):
     __tablename__ = "carts"
     cart_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     user_id: Mapped[str] = mapped_column(String(100), unique=True)
     items: Mapped[list["CartItem"]] = relationship("CartItem", cascade="all,delete", back_populates="cart")
 
@@ -90,7 +99,7 @@ class CartItem(Base):
 class Order(Base):
     __tablename__ = "orders"
     order_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    order_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    order_date: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), default=OrderStatus.Pending)
     total_amount: Mapped[float] = mapped_column(Numeric(18, 2))
     user_id: Mapped[str] = mapped_column(String(100), index=True)
@@ -112,7 +121,7 @@ class OrderItem(Base):
 class Payment(Base):
     __tablename__ = "payments"
     payment_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    paid_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    paid_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     amount: Mapped[float] = mapped_column(Numeric(18, 2))
     status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus), default=PaymentStatus.Pending)
     provider: Mapped[str] = mapped_column(String(50))
@@ -126,7 +135,7 @@ class UserInteraction(Base):
     user_id: Mapped[str] = mapped_column(String(100), index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.product_id"), index=True)
     interaction_type: Mapped[InteractionType] = mapped_column(Enum(InteractionType))
-    interaction_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    interaction_time: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     interaction_metadata: Mapped[str | None] = mapped_column("metadata", Text, nullable=True)
     embedding: Mapped[str | None] = mapped_column(Text, nullable=True)
     external_event_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
@@ -141,7 +150,7 @@ class UserPreference(Base):
     exclude_viewed: Mapped[bool] = mapped_column(Boolean, default=False)
     algorithm: Mapped[str | None] = mapped_column(String(50), nullable=True)
     max_per_category: Mapped[int] = mapped_column(Integer, default=3)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
 
 
 class MLModel(Base):
@@ -152,7 +161,7 @@ class MLModel(Base):
     hyperparameters_json: Mapped[str] = mapped_column(Text, default="{}")
     metrics_json: Mapped[str] = mapped_column(Text, default="{}")
     status: Mapped[str] = mapped_column(String(20), default="registered")
-    trained_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    trained_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
@@ -163,7 +172,7 @@ class TrainingJob(Base):
     algorithm: Mapped[str] = mapped_column(String(50))
     status: Mapped[str] = mapped_column(String(20), default="queued")
     message: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    requested_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    requested_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
@@ -173,7 +182,7 @@ class Experiment(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True)
     status: Mapped[str] = mapped_column(String(20), default="running")
     config_json: Mapped[str] = mapped_column(Text, default="{}")
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     variants: Mapped[list["ModelVariant"]] = relationship("ModelVariant", cascade="all,delete", back_populates="experiment")
 

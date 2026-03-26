@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import UTC, datetime
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
@@ -29,6 +28,7 @@ from .models import (
     TrainingJob,
     UserInteraction,
     UserPreference,
+    utc_now,
 )
 from .recommendation_service import SQLRecommendationService, generate_experiment_salt
 from .schemas import (
@@ -512,7 +512,7 @@ def ingest_event(req: EventRequest, db: Session = Depends(get_db)):
         user_id=req.user_id,
         product_id=req.item_id,
         interaction_type=_parse_interaction_type(req.action_type),
-        interaction_time=req.timestamp or datetime.now(UTC).replace(tzinfo=None),
+        interaction_time=req.timestamp or utc_now(),
         interaction_metadata=json.dumps(req.context),
         external_event_id=event_id,
     )
@@ -602,7 +602,7 @@ def train_model(req: TrainModelRequest, db: Session = Depends(get_db)):
         algorithm=req.algorithm,
         status="completed",
         message=json.dumps(metadata),
-        completed_at=datetime.now(UTC).replace(tzinfo=None),
+        completed_at=utc_now(),
     )
     db.add(job)
     db.commit()
@@ -627,7 +627,7 @@ def create_experiment(req: ExperimentRequest, db: Session = Depends(get_db)):
     running = db.query(Experiment).filter(Experiment.status == "running").all()
     for experiment in running:
         experiment.status = "concluded"
-        experiment.ended_at = datetime.now(UTC).replace(tzinfo=None)
+        experiment.ended_at = utc_now()
 
     experiment = Experiment(
         name=req.name,
