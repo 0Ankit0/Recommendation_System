@@ -1,6 +1,6 @@
 import enum
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
@@ -12,7 +12,7 @@ def utc_now() -> datetime:
     The app treats database datetimes as UTC, but the current schema stores them
     without timezone metadata for broad backend/SQLite compatibility.
     """
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class OrderStatus(str, enum.Enum):

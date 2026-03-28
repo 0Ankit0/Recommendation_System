@@ -5,6 +5,7 @@ import uuid
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
@@ -31,6 +32,7 @@ from .models import (
     utc_now,
 )
 from .recommendation_service import SQLRecommendationService, generate_experiment_salt
+from .security import create_access_token, decode_access_token, hash_password, verify_password
 from .schemas import (
     AddCartItemRequest,
     AddressRequest,
@@ -45,6 +47,7 @@ from .schemas import (
     EventRequest,
     ExperimentRequest,
     ExperimentResponse,
+    LoginRequest,
     ModelMetricsResponse,
     OrderItemRequest,
     OrderItemResponse,
@@ -58,7 +61,9 @@ from .schemas import (
     ProductResponse,
     RecommendationEnvelope,
     RecommendationItemResponse,
+    RegisterRequest,
     RemoveCartItemRequest,
+    TokenResponse,
     TrainModelRequest,
     TrainModelResponse,
     UserInteractionRequest,
@@ -77,12 +82,56 @@ app.add_middleware(
     allow_headers=["*"],
 )
 Base.metadata.create_all(bind=engine)
+auth_scheme = HTTPBearer(auto_error=True)
+users_by_email: dict[str, dict[str, str | bool]] = {}
+users_by_id: dict[str, dict[str, str | bool]] = {}
+
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(auth_scheme)) -> dict[str, str | bool]:
+    payload = decode_access_token(credentials.credentials)
+    user_id = str(payload["sub"])
+    user = users_by_id.get(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
+
+
+def require_admin(current_user: dict[str, str | bool] = Depends(get_current_user)) -> dict[str, str | bool]:
+    if not bool(current_user.get("is_admin")):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
 
 
 @app.get("/health")
 def health(db: Session = Depends(get_db)):
     db.execute(text("SELECT 1"))
     return {"status": "ok", "database": "ok"}
+
+
+@app.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
+def register(req: RegisterRequest):
+    email = req.email.strip().lower()
+    if email in users_by_email:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+    user = {
+        "user_id": req.user_id.strip(),
+        "email": email,
+        "password_hash": hash_password(req.password),
+        "is_admin": req.is_admin,
+    }
+    users_by_email[email] = user
+    users_by_id[str(user["user_id"])] = user
+    return {"user_id": user["user_id"], "email": email, "is_admin": req.is_admin}
+
+
+@app.post("/api/auth/login", response_model=TokenResponse)
+def login(req: LoginRequest):
+    email = req.email.strip().lower()
+    user = users_by_email.get(email)
+    if not user or not verify_password(req.password, str(user["password_hash"])):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    access_token = create_access_token(subject=str(user["user_id"]), is_admin=bool(user["is_admin"]))
+    return TokenResponse(access_token=access_token)
 
 
 @app.get("/api/categories", response_model=list[CategoryResponse])
@@ -106,7 +155,11 @@ def get_category(category_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/categories", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
-def create_category(req: CategoryRequest, db: Session = Depends(get_db)):
+def create_category(
+    req: CategoryRequest,
+    db: Session = Depends(get_db),
+    _admin: dict[str, str | bool] = Depends(require_admin),
+):
     if req.parent_category_id:
         _get_category_or_404(db, req.parent_category_id)
     category = Category(name=req.name.strip(), parent_category_id=req.parent_category_id)
@@ -172,7 +225,11 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
-def create_product(req: ProductRequest, db: Session = Depends(get_db)):
+def create_product(
+    req: ProductRequest,
+    db: Session = Depends(get_db),
+    _admin: dict[str, str | bool] = Depends(require_admin),
+):
     _get_category_or_404(db, req.category_id)
     product = Product(**req.model_dump())
     db.add(product)
@@ -291,7 +348,13 @@ def create_payment(req: PaymentRequest, db: Session = Depends(get_db)):
 
 
 @app.post("/api/cart/add", response_model=CartResponse)
-def add_cart_item(req: AddCartItemRequest, db: Session = Depends(get_db)):
+def add_cart_item(
+    req: AddCartItemRequest,
+    db: Session = Depends(get_db),
+    current_user: dict[str, str | bool] = Depends(get_current_user),
+):
+    if str(current_user["user_id"]) != req.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify another user's cart")
     product = _get_product_or_404(db, req.product_id)
     cart = db.query(Cart).options(joinedload(Cart.items)).filter(Cart.user_id == req.user_id).first()
     if not cart:

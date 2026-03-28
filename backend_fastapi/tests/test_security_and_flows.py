@@ -5,7 +5,7 @@ os.environ["JWT_SECRET_KEY"] = "test-secret-key-123456"
 
 from fastapi.testclient import TestClient
 
-from app.main import app
+from backend_fastapi.app.main import app
 
 client = TestClient(app)
 
