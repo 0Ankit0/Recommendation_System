@@ -14,6 +14,24 @@ class CamelModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
 
+
+
+class RegisterRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=100)
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+    is_admin: bool = False
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
 class AddressRequest(BaseModel):
     street: str = Field(min_length=1, max_length=250)
     city: str = Field(min_length=1, max_length=100)
